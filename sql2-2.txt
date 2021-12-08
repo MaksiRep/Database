@@ -1,0 +1,395 @@
+1.)Выбрать менеджера (работника, у которого в подчинении есть хотя бы один человек), имеющего
+наименьший стаж. Если таких менеджеров несколько, вывести всех
+
+SELECT *
+FROM (
+         SELECT emv.EMPLOYEE_ID
+         FROM (SELECT emp.employee_id, emp.hire_date
+               FROM (SELECT employee_id, hire_date
+                     FROM employees e
+                     WHERE EXISTS(SELECT * FROM employees WHERE manager_id = e.employee_id)) emp) emv
+         GROUP BY emv.EMPLOYEE_ID
+         ORDER BY MAX(emv.hire_date) DESC)
+WHERE ROWNUM = 1;
+
+-----------------------------------------------------------------------------------------
+
+2.)Выбрать сотрудников, имеющих оклад выше среднего оклада подразделения, где они работают.
+Исключить из выборки сотрудников, которые не приписаны ни к какому подразделению
+
+SELECT EMPLOYEE_ID, LAST_NAME, SALARY, DEPARTMENT_ID
+FROM (
+         SELECT EMPLOYEE_ID, LAST_NAME, SALARY, DEPARTMENT_ID, AVG(SALARY) OVER (PARTITION BY  DEPARTMENT_ID) AS SRZ
+         FROM EMPLOYEES DEPARTMENTS
+         WHERE DEPARTMENT_ID = DEPARTMENT_ID
+
+     )
+WHERE SALARY > SRZ
+
+-----------------------------------------------------------------------------------------
+
+3.)Выбрать сотрудников, имеющих оклад равный минимальному окладу подразделения, где они
+работают. Исключить из выборки сотрудников, которые не приписаны ни к какому
+подразделению
+
+SELECT EMPLOYEE_ID, LAST_NAME, SALARY, DEPARTMENT_ID
+FROM (
+         SELECT EMPLOYEE_ID, LAST_NAME, SALARY, DEPARTMENT_ID, MIN(SALARY) OVER (PARTITION BY DEPARTMENT_ID) AS SRZ
+         FROM EMPLOYEES DEPARTMENTS
+         WHERE DEPARTMENT_ID = DEPARTMENT_ID
+     )
+WHERE SALARY = SRZ
+
+-----------------------------------------------------------------------------------------
+
+4.)Выбрать среди работников Америки (region_name = 'Americas') тех, чья зарплата превосходит
+зарплату менеджера из Европы (region_name = 'Europe') с наибольшим количеством
+подчиненных
+
+WITH managers as (SELECT employee_id, manager_id, department_id
+                  FROM employees e
+                  WHERE EXISTS(SELECT * FROM employees WHERE manager_id = e.employee_id)),
+
+     couunte as (SELECT COUNT(EMPLOYEES.EMPLOYEE_ID) as count,
+                        emc.EMPLOYEE_ID
+                 FROM (SELECT managers.EMPLOYEE_ID
+                       FROM managers
+                                JOIN EMPLOYEES ON EMPLOYEES.MANAGER_ID = managers.EMPLOYEE_ID
+                                JOIN DEPARTMENTS on DEPARTMENTS.DEPARTMENT_ID = managers.DEPARTMENT_ID
+                                JOIN LOCATIONS on LOCATIONS.LOCATION_ID = DEPARTMENTS.LOCATION_ID
+                                JOIN COUNTRIES
+                                     on COUNTRIES.COUNTRY_ID = LOCATIONS.COUNTRY_ID AND REGION_ID = '1'
+                       GROUP BY managers.EMPLOYEE_ID) emc,
+                      EMPLOYEES
+                 WHERE EMPLOYEES.MANAGER_ID = emc.EMPLOYEE_ID
+                 GROUP BY emc.EMPLOYEE_ID)
+
+
+SELECT FIRST_NAME, LAST_NAME
+FROM EMPLOYEES
+         JOIN DEPARTMENTS on DEPARTMENTS.DEPARTMENT_ID = EMPLOYEES.DEPARTMENT_ID
+         JOIN LOCATIONS on LOCATIONS.LOCATION_ID = DEPARTMENTS.LOCATION_ID
+         JOIN COUNTRIES
+              on COUNTRIES.COUNTRY_ID = LOCATIONS.COUNTRY_ID AND REGION_ID = '2'
+         JOIN (SELECT EMPLOYEES.EMPLOYEE_ID, SALARY as maxSalary
+               FROM EMPLOYEES
+                        JOIN ((SELECT emp.EMPLOYEE_ID
+                               FROM (SELECT COUNT(EMPLOYEES.EMPLOYEE_ID) as count, managers.EMPLOYEE_ID
+                                     FROM managers,
+                                          EMPLOYEES
+                                     WHERE EMPLOYEES.MANAGER_ID = managers.EMPLOYEE_ID
+                                     GROUP BY managers.EMPLOYEE_ID) emp
+                                        JOIN (SELECT MAX(count) as max
+                                              FROM couunte) emc ON count = max) emv)
+                             ON EMPLOYEES.EMPLOYEE_ID = emv.EMPLOYEE_ID) emp
+              ON SALARY > maxSalary
+
+-----------------------------------------------------------------------------------------
+
+5.)Выбрать сумму окладов сотрудников по подразделениям компании и процент, который эта
+сумма составляет от суммы окладов всех сотрудников компании. Если в подразделении нет
+сотрудников, то считать, что сумма их окладов равна нулю. В отчете отдельной строкой учесть
+сведения о сотрудниках, которые не приписаны ни к какому подразделению компании (null в
+поле подразделения) При вычислении процентов должно быть использовано округление
+результата, а не отбрасывание дробной части
+
+SELECT dep,
+       salary,
+       ROUND(100 * salary / (SELECT SUM(SALARY)
+                             FROM EMPLOYEES), 2) as perc
+FROM (SELECT COALESCE(DEPARTMENTS.DEPARTMENT_ID, -1) as dep, SUM(COALESCE(SALARY, 0)) as salary
+      FROM EMPLOYEES
+               FULL JOIN DEPARTMENTS on EMPLOYEES.DEPARTMENT_ID = DEPARTMENTS.DEPARTMENT_ID
+      GROUP BY DEPARTMENTS.DEPARTMENT_ID
+     ) emc
+
+-----------------------------------------------------------------------------------------
+
+6.)Выбрать сумму среднего оклада сотрудников по подразделениям компании и процент, который
+эта сумма составляет от средней величины окладов всех сотрудников компании. Если в
+подразделении нет сотрудников, то считать, что сумма их окладов равна нулю. В отчете
+отдельной строкой учесть сведения о сотрудниках, которые не приписаны ни к какому
+подразделению компании
+
+SELECT dep,
+       salary,
+       ROUND(100 * salary / (SELECT AVG(SALARY)
+                             FROM EMPLOYEES), 2) as perc
+FROM (SELECT COALESCE(DEPARTMENTS.DEPARTMENT_ID, -1) as dep, AVG(COALESCE(SALARY, 0)) as salary
+      FROM EMPLOYEES
+               FULL JOIN DEPARTMENTS on EMPLOYEES.DEPARTMENT_ID = DEPARTMENTS.DEPARTMENT_ID
+      GROUP BY DEPARTMENTS.DEPARTMENT_ID
+     ) emc
+
+-----------------------------------------------------------------------------------------
+
+7.)Вывести имена сотрудников и количество работников с одним именем
+
+SELECT FIRST_NAME, COUNT(FIRST_NAME) as count
+         FROM EMPLOYEES
+GROUP BY FIRST_NAME
+
+-----------------------------------------------------------------------------------------
+
+8.)Вывести для каждого отдела из Америки (region_name = 'Americas') количество работников в
+иерархии до третьего уровня. Первый уровень - работники без руководителя, второй уровень -
+это их подчиненные, а третий уровень - подчиненные работников второго уровня
+
+SELECT COUNT(DISTINCT mangers_first),
+       COUNT(DISTINCT manager_second),
+       COUNT(DISTINCT manager_third)
+FROM (SELECT mangers_first, manager_second, EMPLOYEE_ID as manager_third, DEPARTMENT_ID as dep
+      FROM (SELECT mangers_first, EMPLOYEES.EMPLOYEE_ID as manager_second
+            FROM (SELECT EMPLOYEE_ID as mangers_first
+                  FROM EMPLOYEES
+                           JOIN DEPARTMENTS on EMPLOYEES.DEPARTMENT_ID = DEPARTMENTS.DEPARTMENT_ID
+                           JOIN LOCATIONS on DEPARTMENTS.LOCATION_ID = LOCATIONS.LOCATION_ID
+                           JOIN COUNTRIES on COUNTRIES.COUNTRY_ID = LOCATIONS.COUNTRY_ID
+                  WHERE COUNTRIES.REGION_ID = '2'
+                    AND EMPLOYEES.MANAGER_ID IS NULL)
+                     JOIN EMPLOYEES ON MANAGER_ID = mangers_first
+                     JOIN DEPARTMENTS on EMPLOYEES.DEPARTMENT_ID = DEPARTMENTS.DEPARTMENT_ID
+                     JOIN LOCATIONS on DEPARTMENTS.LOCATION_ID = LOCATIONS.LOCATION_ID
+                     JOIN COUNTRIES on COUNTRIES.COUNTRY_ID = LOCATIONS.COUNTRY_ID
+            WHERE COUNTRIES.REGION_ID = '2'
+           )
+               JOIN EMPLOYEES ON manager_second = MANAGER_ID AND DEPARTMENT_ID IS NOT NULL
+               JOIN DEPARTMENTS on EMPLOYEES.DEPARTMENT_ID = DEPARTMENTS.DEPARTMENT_ID
+               JOIN LOCATIONS on DEPARTMENTS.LOCATION_ID = LOCATIONS.LOCATION_ID
+               JOIN COUNTRIES on COUNTRIES.COUNTRY_ID = LOCATIONS.COUNTRY_ID
+      WHERE COUNTRIES.REGION_ID = '2'
+     )
+
+-----------------------------------------------------------------------------------------
+
+9.)Вывести названия всех отделов, в которых наименьшая зарплата выше средней зарплаты в
+Америке(region_name = 'Americas')
+
+SELECT dep
+FROM (SELECT DEPARTMENTS.DEPARTMENT_ID as dep, AVG(SALARY) AS SRZ1
+      FROM employees
+               JOIN departments ON departments.department_id = employees.department_id
+               JOIN locations ON departments.location_id = locations.location_id
+               JOIN COUNTRIES on LOCATIONS.COUNTRY_ID = COUNTRIES.COUNTRY_ID
+      WHERE (COUNTRIES.REGION_ID != '2')
+      GROUP BY DEPARTMENTS.DEPARTMENT_ID) emv,
+     (SELECT AVG(SRZ) as SRZ2
+      FROM (SELECT AVG(SALARY) AS SRZ
+            FROM employees
+                     JOIN departments ON departments.department_id = employees.department_id
+                     JOIN locations ON departments.location_id = locations.location_id
+                     JOIN COUNTRIES on LOCATIONS.COUNTRY_ID = COUNTRIES.COUNTRY_ID
+            WHERE (COUNTRIES.REGION_ID = '2')
+            GROUP BY departments.DEPARTMENT_ID)) emp
+WHERE SRZ1 > SRZ2
+GROUP BY dep
+
+-----------------------------------------------------------------------------------------
+
+10.)Вывести общую зарплату работников, работающих в отделе с наименьшим количеством
+сотрудников
+
+SELECT SUM(SALARY) as salary
+FROM (SELECT emp.department_id
+      FROM (SELECT departments.department_id, departments.department_name, COUNT(employees.department_id) as count
+            FROM employees,
+                 departments
+            WHERE departments.department_id = employees.department_id
+            GROUP BY departments.department_id, departments.department_name
+            ORDER BY count) emp
+      WHERE ROWNUM = 1) emv, EMPLOYEES
+WHERE emv.DEPARTMENT_ID = EMPLOYEES.DEPARTMENT_ID
+
+-----------------------------------------------------------------------------------------
+
+11.)Вывести однофамильцев. Если встречается более двух - вывести их количество.
+
+SELECT emp.LAST_NAME
+FROM (SELECT LAST_NAME, COUNT(LAST_NAME) as count
+      FROM EMPLOYEES
+      GROUP BY LAST_NAME) emp
+WHERE count >= 2
+
+-----------------------------------------------------------------------------------------
+
+12.)Из страны с наибольшим количеством подразделений (департаментов) выбрать работника,
+средняя зарплата которого максимальна. Если таких стран несколько, то найти такого работника
+для каждой из них (то же касается нескольких работников).
+
+SELECT EMPLOYEE_ID, emp2.COUNTRY_ID
+FROM EMPLOYEES
+         JOIN DEPARTMENTS ON EMPLOYEES.DEPARTMENT_ID = DEPARTMENTS.DEPARTMENT_ID
+         JOIN LOCATIONS ON DEPARTMENTS.LOCATION_ID = LOCATIONS.LOCATION_ID
+         JOIN COUNTRIES ON COUNTRIES.COUNTRY_ID = LOCATIONS.COUNTRY_ID
+         JOIN (SELECT MAX(Salary) as max, emp1.COUNTRY_ID
+               FROM EMPLOYEES
+                        JOIN DEPARTMENTS ON EMPLOYEES.DEPARTMENT_ID = DEPARTMENTS.DEPARTMENT_ID
+                        JOIN LOCATIONS ON DEPARTMENTS.LOCATION_ID = LOCATIONS.LOCATION_ID
+                        JOIN COUNTRIES ON COUNTRIES.COUNTRY_ID = LOCATIONS.COUNTRY_ID
+                        JOIN (SELECT emv.COUNTRY_ID
+                              FROM (SELECT COUNT(DEPARTMENTS.DEPARTMENT_ID) as count, COUNTRIES.COUNTRY_ID
+                                    FROM DEPARTMENTS
+                                             JOIN LOCATIONS ON DEPARTMENTS.LOCATION_ID = LOCATIONS.LOCATION_ID
+                                             JOIN COUNTRIES ON COUNTRIES.COUNTRY_ID = LOCATIONS.COUNTRY_ID
+                                    GROUP BY COUNTRIES.COUNTRY_ID
+                                    ORDER BY count DESC) emv,
+                                   (SELECT MAX(count) as max
+                                    FROM (SELECT COUNT(DEPARTMENTS.DEPARTMENT_ID) as count
+                                          FROM DEPARTMENTS
+                                                   JOIN LOCATIONS ON DEPARTMENTS.LOCATION_ID = LOCATIONS.LOCATION_ID
+                                                   JOIN COUNTRIES ON COUNTRIES.COUNTRY_ID = LOCATIONS.COUNTRY_ID
+                                          GROUP BY COUNTRIES.COUNTRY_ID
+                                          ORDER BY count DESC)) emp
+                              WHERE count = max) emp1 ON emp1.COUNTRY_ID = COUNTRIES.COUNTRY_ID
+               GROUP BY emp1.COUNTRY_ID) emp2 ON emp2.COUNTRY_ID = COUNTRIES.COUNTRY_ID
+WHERE SALARY = emp2.max
+
+-----------------------------------------------------------------------------------------
+
+13.)Из страны с наибольшим количеством подразделений (департаментов) выбрать работника, у
+которого в подчинении больше всего человек. Если таких стран несколько, то найти такого
+работника для каждой из них
+
+WITH countDep as (SELECT COUNT(DEPARTMENTS.DEPARTMENT_ID) as count, COUNTRIES.COUNTRY_ID as id
+                  FROM DEPARTMENTS
+                           JOIN LOCATIONS ON DEPARTMENTS.LOCATION_ID = LOCATIONS.LOCATION_ID
+                           JOIN COUNTRIES ON COUNTRIES.COUNTRY_ID = LOCATIONS.COUNTRY_ID
+                  GROUP BY COUNTRIES.COUNTRY_ID
+                  ORDER BY count DESC),
+     
+     
+     manager as (SELECT managers, id
+                 FROM (SELECT employee_id as managers, e.manager_id, e.department_id, L.COUNTRY_ID as id
+                       FROM employees e
+                                JOIN DEPARTMENTS D on D.DEPARTMENT_ID = e.DEPARTMENT_ID
+                                JOIN LOCATIONS L on L.LOCATION_ID = D.LOCATION_ID
+                                JOIN COUNTRIES C2 on C2.COUNTRY_ID = L.COUNTRY_ID
+                       WHERE EXISTS(SELECT * FROM employees WHERE manager_id = e.employee_id))),
+     
+     
+     countOfEmpl as (SELECT COUNT(employeers) as countEmp, managers
+                     FROM manager,
+                          (SELECT EMPLOYEE_ID as employeers, EMPLOYEES.MANAGER_ID, id
+                           FROM EMPLOYEES
+                                    JOIN DEPARTMENTS ON EMPLOYEES.DEPARTMENT_ID = DEPARTMENTS.DEPARTMENT_ID
+                                    JOIN LOCATIONS ON DEPARTMENTS.LOCATION_ID = LOCATIONS.LOCATION_ID
+                                    JOIN COUNTRIES ON COUNTRIES.COUNTRY_ID = LOCATIONS.COUNTRY_ID
+                                    JOIN (SELECT id
+                                          FROM countDep,
+                                               (SELECT MAX(count) as max
+                                                FROM (SELECT count, id FROM countDep)) emp
+                                          WHERE emp.max = countDep.count) on COUNTRIES.COUNTRY_ID = id) emc
+                     WHERE managers = emc.MANAGER_ID AND emc.id = manager.id
+                     group by managers)
+
+SELECT managers
+FROM countOfEmpl,
+     (SELECT MAX(countEmp) as max
+      FROM countOfEmpl)
+WHERE countEmp = max
+
+-----------------------------------------------------------------------------------------
+
+14.)Из страны, в которой проживает сотрудник с наименьшим стажем (если таких сотрудников
+несколько, то рассмотреть страну для каждого из них), выбрать работника, в подчинении
+которого больше всего человек
+
+WITH minDate as (SELECT EMPLOYEE_ID as employ, COUNTRIES.COUNTRY_ID as id, HIRE_DATE as datee
+                 FROM (SELECT MAX(EMPLOYEES.HIRE_DATE) as datee FROM EMPLOYEES),
+                      EMPLOYEES
+                          JOIN DEPARTMENTS ON EMPLOYEES.DEPARTMENT_ID = DEPARTMENTS.DEPARTMENT_ID
+                          JOIN LOCATIONS ON DEPARTMENTS.LOCATION_ID = LOCATIONS.LOCATION_ID
+                          JOIN COUNTRIES ON COUNTRIES.COUNTRY_ID = LOCATIONS.COUNTRY_ID
+                 WHERE HIRE_DATE = datee),
+
+
+     manager as (SELECT managers, id
+                 FROM (SELECT employee_id as managers, e.manager_id, e.department_id, L.COUNTRY_ID as id
+                       FROM employees e
+                                JOIN DEPARTMENTS D on D.DEPARTMENT_ID = e.DEPARTMENT_ID
+                                JOIN LOCATIONS L on L.LOCATION_ID = D.LOCATION_ID
+                                JOIN COUNTRIES C2 on C2.COUNTRY_ID = L.COUNTRY_ID
+                       WHERE EXISTS(SELECT * FROM employees WHERE manager_id = e.employee_id))),
+
+
+     countOfEmpl as (SELECT COUNT(employeers) as countEmp, managers
+                     FROM manager,
+                          (SELECT EMPLOYEE_ID as employeers, EMPLOYEES.MANAGER_ID, id
+                           FROM EMPLOYEES
+                                    JOIN DEPARTMENTS ON EMPLOYEES.DEPARTMENT_ID = DEPARTMENTS.DEPARTMENT_ID
+                                    JOIN LOCATIONS ON DEPARTMENTS.LOCATION_ID = LOCATIONS.LOCATION_ID
+                                    JOIN COUNTRIES ON COUNTRIES.COUNTRY_ID = LOCATIONS.COUNTRY_ID
+                                    JOIN (SELECT employ, datee, id
+                                          FROM minDate) on COUNTRIES.COUNTRY_ID = id) emc
+                     WHERE managers = emc.MANAGER_ID
+                       AND emc.id = manager.id
+                     group by managers)
+
+SELECT managers
+FROM countOfEmpl,
+     (SELECT MAX(countEmp) as max
+      FROM countOfEmpl)
+WHERE countEmp = max
+
+-----------------------------------------------------------------------------------------
+
+15.)Из страны, в которой проживает сотрудник с наибольшим стажем (если таких несколько, то
+рассмотреть страну для каждого из них), выбрать работника, с наибольшей зарплатой его
+подчиненных
+
+WITH maxDate as (SELECT EMPLOYEE_ID as employ, COUNTRIES.COUNTRY_ID as id, HIRE_DATE as datee
+                 FROM (SELECT MIN(EMPLOYEES.HIRE_DATE) as datee FROM EMPLOYEES),
+                      EMPLOYEES
+                          JOIN DEPARTMENTS ON EMPLOYEES.DEPARTMENT_ID = DEPARTMENTS.DEPARTMENT_ID
+                          JOIN LOCATIONS ON DEPARTMENTS.LOCATION_ID = LOCATIONS.LOCATION_ID
+                          JOIN COUNTRIES ON COUNTRIES.COUNTRY_ID = LOCATIONS.COUNTRY_ID
+                 WHERE HIRE_DATE = datee),
+
+
+     manager as (SELECT managers, id
+                 FROM (SELECT employee_id as managers, e.manager_id, e.department_id, L.COUNTRY_ID as id
+                       FROM employees e
+                                JOIN DEPARTMENTS D on D.DEPARTMENT_ID = e.DEPARTMENT_ID
+                                JOIN LOCATIONS L on L.LOCATION_ID = D.LOCATION_ID
+                                JOIN COUNTRIES C2 on C2.COUNTRY_ID = L.COUNTRY_ID
+                       WHERE EXISTS(SELECT * FROM employees WHERE manager_id = e.employee_id))),
+
+
+     countOfEmpl as (SELECT employeers as employer, managers
+                     FROM manager,
+                          (SELECT EMPLOYEE_ID as employeers, EMPLOYEES.MANAGER_ID, id
+                           FROM EMPLOYEES
+                                    JOIN DEPARTMENTS ON EMPLOYEES.DEPARTMENT_ID = DEPARTMENTS.DEPARTMENT_ID
+                                    JOIN LOCATIONS ON DEPARTMENTS.LOCATION_ID = LOCATIONS.LOCATION_ID
+                                    JOIN COUNTRIES ON COUNTRIES.COUNTRY_ID = LOCATIONS.COUNTRY_ID
+                                    JOIN (SELECT employ, datee, id
+                                          FROM maxDate) on COUNTRIES.COUNTRY_ID = id) emc
+                     WHERE managers = emc.MANAGER_ID
+                       AND emc.id = manager.id),
+     maxSal as (SELECT SUM(SALARY) as salary, managers
+                FROM (SELECT managers, employer
+                      FROM countOfEmpl),
+                     EMPLOYEES
+                WHERE employer = EMPLOYEE_ID
+                GROUP BY managers)
+
+SELECT managers
+FROM maxSal,
+     (SELECT MAX(salary) as minSalary
+      FROM maxSal)
+WHERE salary = minSalary
+
+-----------------------------------------------------------------------------------------
+
+16.)Определить год, в котором было трудоустроено больше всего человек
+
+SELECT HIRE_DATE
+FROM (SELECT HIRE_DATE, COUNT(HIRE_DATE) as count
+      FROM EMPLOYEES
+      GROUP BY HIRE_DATE
+      ORDER BY count DESC)
+WHERE ROWNUM = 1
+
+
+
+

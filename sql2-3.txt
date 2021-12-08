@@ -1,0 +1,321 @@
+1.)Определить месяц, в котором было трудоустроено больше всего человек. В результат
+вывести порядковый номер (например, 03 - это март)
+
+WITH countInMounth as (SELECT SUBSTR(HIRE_DATE, 4, 3) as mounth, COUNT(EMPLOYEE_ID) as count
+                       FROM EMPLOYEES
+                       GROUP BY SUBSTR(HIRE_DATE, 4, 3)
+)
+
+SELECT mounth
+FROM (SELECT MAX(count) as max
+      FROM countInMounth) moun,
+     countInMounth
+where count = max
+
+-----------------------------------------------------------------------------------------
+
+2.)Определить отдел работника, который эффективнее всех продвинулся по карьерной
+лестнице. Под эффективностью будем понимать разницу максимальной зарплаты на новой
+должности и минимальной на старой должности
+
+WITH empWithDate as (SELECT emp.EMPLOYEE_ID, JOB_ID, START_DATE as datee, DEPARTMENT_ID as depId
+                     FROM (SELECT EMPLOYEE_ID, COUNT(JOB_ID) as count
+                           FROM JOB_HISTORY
+                           GROUP BY EMPLOYEE_ID
+                          ) emp,
+                          JOB_HISTORY
+                     WHERE count > 1
+                       AND JOB_HISTORY.EMPLOYEE_ID = emp.EMPLOYEE_ID),
+
+
+     empWithUp as (SELECT lastDate.EMPLOYEE_ID, (lastDate.MAX_SALARY - firstDate.MIN_SALARY) as uplvl
+                   FROM (SELECT e.EMPLOYEE_ID, e.JOB_ID, e.datee, MAX_SALARY
+                         FROM empWithDate e
+                                  JOIN empWithDate d on e.datee > d.datee
+                             AND e.EMPLOYEE_ID = d.EMPLOYEE_ID
+                                  JOIN JOBS on e.JOB_ID = JOBS.JOB_ID) lastDate,
+                        (SELECT e.EMPLOYEE_ID, e.JOB_ID, e.datee, MIN_SALARY
+                         FROM empWithDate e
+                                  JOIN empWithDate d on e.datee < d.datee
+                             AND e.EMPLOYEE_ID = d.EMPLOYEE_ID
+                                  JOIN JOBS on e.JOB_ID = JOBS.JOB_ID) firstDate
+                   WHERE lastDate.EMPLOYEE_ID = firstDate.EMPLOYEE_ID)
+
+SELECT DEPARTMENT_NAME
+FROM EMPLOYEES
+    JOIN (SELECT EMPLOYEE_ID as winner
+      FROM (SELECT MAX(uplvl) as max
+            FROM empWithUp),
+           empWithUp
+      WHERE max = uplvl) on EMPLOYEE_ID = winner
+JOIN DEPARTMENTS on EMPLOYEES.DEPARTMENT_ID = DEPARTMENTS.DEPARTMENT_ID
+
+-----------------------------------------------------------------------------------------
+
+3.)Определить разницу в месяцах между самым первым трудоустроившимся работником и
+самым последним
+
+SELECT MONTHS_BETWEEN((SELECT MAX(hire_date) FROM employees), (SELECT MIN(hire_date) FROM employees)) as minuss
+FROM EMPLOYEES
+WHERE ROWNUM = 1
+
+-----------------------------------------------------------------------------------------
+
+4.)Определить разницу в месяцах между трудоустройствами однофамильцев. Поскольку
+однофамильцев может быть более двух, то выводить самый большой промежуток из
+возможных для всех сочетаний однофамильцев
+
+WITH empWithDate as (SELECT EMPLOYEE_ID, emp.LAST_NAME, HIRE_DATE
+                     FROM (SELECT COUNT(LAST_NAME) as count, LAST_NAME
+                           FROM EMPLOYEES
+                           group by LAST_NAME) emp
+                              JOIN EMPLOYEES ON EMPLOYEES.LAST_NAME = emp.LAST_NAME
+                     WHERE count > 1
+                     ORDER BY LAST_NAME)
+
+SELECT LAST_NAME, MONTHS_BETWEEN(MAX(HIRE_DATE), MIN(HIRE_DATE)) as minn FROM empWithDate
+GROUP BY LAST_NAME
+
+-----------------------------------------------------------------------------------------
+
+5.)Отобразить список всех работников, которые работают в двух странах, лидирующих по
+уровню общего заработка сотрудников
+
+WITH salaryInCountryes as (SELECT SUM(SALARY)          as salary,
+                                  COUNTRIES.COUNTRY_ID as country
+                           FROM EMPLOYEES
+                                    JOIN DEPARTMENTS on DEPARTMENTS.DEPARTMENT_ID = EMPLOYEES.DEPARTMENT_ID
+                                    JOIN LOCATIONS on LOCATIONS.LOCATION_ID = DEPARTMENTS.LOCATION_ID
+                                    JOIN COUNTRIES on COUNTRIES.COUNTRY_ID = LOCATIONS.COUNTRY_ID
+                           group by COUNTRIES.COUNTRY_ID
+                           ORDER BY salary desc)
+
+SELECT EMPLOYEE_ID
+FROM EMPLOYEES
+         JOIN DEPARTMENTS on DEPARTMENTS.DEPARTMENT_ID = EMPLOYEES.DEPARTMENT_ID
+         JOIN LOCATIONS on LOCATIONS.LOCATION_ID = DEPARTMENTS.LOCATION_ID
+         JOIN COUNTRIES on COUNTRIES.COUNTRY_ID = LOCATIONS.COUNTRY_ID
+         JOIN (SELECT country
+               FROM salaryInCountryes
+               WHERE ROWNUM <= 2) co on COUNTRIES.COUNTRY_ID = co.country
+
+-----------------------------------------------------------------------------------------
+
+6.)Подсчитать количество человек, получающих минимальную допустимую зарплату по их
+должности. Если для какой-то должности нет таких работников, то в результат должно уйти
+0 (ноль, но не NULL !)
+
+SELECT EMPLOYEES.JOB_ID, COUNT(EMPLOYEE_ID)
+      FROM EMPLOYEES
+      JOIN JOBS on JOBS.JOB_ID = EMPLOYEES.JOB_ID
+      WHERE MIN_SALARY = SALARY
+      GROUP BY EMPLOYEES.JOB_ID
+      UNION ALL
+      SELECT job_id, 0
+      FROM jobs
+
+-----------------------------------------------------------------------------------------
+
+7.)Посчитать среднюю зарплату работников, работающих на должности с наибольшим
+разбросом между минимальным и максимальным порогом зарплаты (min_salary, max_salary).
+Если таких должностей несколько, то посчитать среднюю зарплату для каждой из них
+
+SELECT AVG(SALARY) as salary , JOB_ID
+FROM EMPLOYEES,
+     (SELECT JOB_ID as job
+      FROM JOBS
+      WHERE MAX_SALARY - MIN_SALARY = (SELECT MAX(MAX_SALARY - MIN_SALARY) as min FROM JOBS))
+WHERE EMPLOYEES.JOB_ID = job
+GROUP BY JOB_ID
+
+-----------------------------------------------------------------------------------------
+
+8.)Посчитать среднюю зарплату работников, работающих на должности с наименьшим
+разбросом между минимальным и максимальным порогом зарплаты (min_salary, max_salary).
+Если таких должностей несколько, то посчитать среднюю зарплату для каждой из них
+
+SELECT AVG(SALARY) as salary , JOB_ID
+FROM EMPLOYEES,
+     (SELECT JOB_ID as job
+      FROM JOBS
+      WHERE MAX_SALARY - MIN_SALARY = (SELECT MIN(MAX_SALARY - MIN_SALARY) as min FROM JOBS))
+WHERE EMPLOYEES.JOB_ID = job
+GROUP BY JOB_ID
+
+-----------------------------------------------------------------------------------------
+
+9.)Посчитать суммарную зарплату работников, работающих на должности с наименьшим
+разбросом между минимальным и максимальным порогом зарплаты (min_salary, max_salary).
+Если таких должностей несколько, то посчитать суммы зарплат для каждой из них
+
+SELECT SUM(SALARY) as salary , JOB_ID
+FROM EMPLOYEES,
+     (SELECT JOB_ID as job
+      FROM JOBS
+      WHERE MAX_SALARY - MIN_SALARY = (SELECT MIN(MAX_SALARY - MIN_SALARY) as min FROM JOBS))
+WHERE EMPLOYEES.JOB_ID = job
+GROUP BY JOB_ID
+
+-----------------------------------------------------------------------------------------
+
+10.)Разбить все зарплаты на 4 уровня: 0-5000, 5001-10000, 10001 - 15000, 15001-1000000. Для
+каждого определить: количество работников, суммарную зарплату, среднюю зарплату,
+количество различных должностей
+
+WITH groups AS (SELECT SALARY, JOB_ID, EMPLOYEE_ID, groupe
+                FROM (SELECT (CASE
+                                  WHEN SALARY > 0 AND SALARY <= 5000 THEN '0 - 5000'
+                                  WHEN SALARY >= 5001 AND SALARY <= 10000 THEN '5001 - 10000'
+                                  WHEN SALARY >= 10001 AND SALARY <= 15000 THEN '10001 - 15000'
+                                  WHEN SALARY >= 15001 AND SALARY <= 1000000 THEN '15001 - 1000000'
+                    END) AS groupe,
+                             employee_id,
+                             salary,
+                             job_id
+                      FROM EMPLOYEES))
+
+SELECT groups.groupe,
+       COUNT(groups.EMPLOYEE_ID) as empCount,
+       SUM(groups.SALARY)        as sumSalary,
+       AVG(groups.SALARY)        as avgSalary,
+       count                     as countOfJobs
+FROM groups,
+     (SELECT COUNT(job) as count, groupe
+      FROM (SELECT DISTINCT JOB_ID as job, groupe
+            FROM groups
+            order by groupe)
+      group by groupe) g
+WHERE groups.groupe = g.groupe
+group by groups.groupe, count
+order by groupe
+
+-----------------------------------------------------------------------------------------
+
+11.)Среди однофамильцев выбрать работника с зарплатой выше средней по его отделу. Если у
+человека нет однофамильцев, в результат его не выводить
+
+WITH empInfo as (SELECT EMPLOYEE_ID, DEPARTMENT_ID, emp.LAST_NAME as lastName, SALARY
+                 FROM (SELECT LAST_NAME
+                       FROM EMPLOYEES
+                       GROUP BY LAST_NAME
+                       HAVING COUNT(LAST_NAME) > 1) emp,
+                      EMPLOYEES
+                 WHERE emp.LAST_NAME = EMPLOYEES.LAST_NAME
+                   AND DEPARTMENT_ID IS NOT NULL)
+
+SELECT lastName, EMPLOYEE_ID, SALARY
+FROM empInfo
+         JOIN (SELECT AVG(SALARY) as avgSalary, DEPARTMENT_ID as depID
+               FROM EMPLOYEES
+               WHERE DEPARTMENT_ID IS NOT NULL
+               group by DEPARTMENT_ID) on DEPARTMENT_ID = depID
+WHERE SALARY > avgSalary
+
+-----------------------------------------------------------------------------------------
+
+12.)Среди однофамильцев выбрать работника с наибольшей зарплатой. Если у человека нет
+однофамильцев, в результат его не выводить
+
+WITH empInfo as (SELECT EMPLOYEE_ID, DEPARTMENT_ID, emp.LAST_NAME as lastName, SALARY
+                 FROM (SELECT LAST_NAME
+                       FROM EMPLOYEES
+                       GROUP BY LAST_NAME
+                       HAVING COUNT(LAST_NAME) > 1) emp,
+                      EMPLOYEES
+                 WHERE emp.LAST_NAME = EMPLOYEES.LAST_NAME
+                   AND DEPARTMENT_ID IS NOT NULL)
+
+SELECT empInfo.lastName, EMPLOYEE_ID, SALARY
+FROM (SELECT lastName, MAX(SALARY) as max
+      FROM empInfo
+      group by lastName), empInfo
+WHERE SALARY = max
+
+-----------------------------------------------------------------------------------------
+
+13.)Среди первых трех лидирующих по количеству подчиненных менеджеров выбрать
+менеджера с наибольшим стажем
+
+SELECT MIN(HIRE_DATE)
+FROM (SELECT  HIRE_DATE
+      FROM (SELECT COUNT(emp.EMPLOYEE_ID) as count, HIRE_DATE
+            FROM (SELECT EMPLOYEE_ID, MANAGER_ID
+                  FROM EMPLOYEES
+                  WHERE MANAGER_ID IS NOT NULL) emp
+                     LEFT JOIN EMPLOYEES on EMPLOYEES.EMPLOYEE_ID = emp.MANAGER_ID
+            group by EMPLOYEES.EMPLOYEE_ID, HIRE_DATE
+            order by count DESC, HIRE_DATE ASC)
+      WHERE ROWNUM <= 3)
+
+-----------------------------------------------------------------------------------------
+
+14.)Среди первых трех самых высокооплачиваемых сотрудников отобрать того, у которого
+больше всего подчиненных
+
+WITH managers as (SELECT EMPLOYEES.EMPLOYEE_ID as manager, COUNT(emp.EMPLOYEE_ID) as count, SALARY
+                  FROM (SELECT EMPLOYEE_ID, MANAGER_ID
+                        FROM EMPLOYEES
+                        WHERE MANAGER_ID IS NOT NULL) emp
+                           LEFT JOIN EMPLOYEES on EMPLOYEES.EMPLOYEE_ID = emp.MANAGER_ID
+                  group by EMPLOYEES.EMPLOYEE_ID, SALARY)
+
+SELECT manager FROM (SELECT MAX(count) as max
+FROM (SELECT *
+      FROM (SELECT EMPLOYEE_ID as maxEmpl, SALARY
+            FROM EMPLOYEES
+            order by SALARY desc)
+      WHERE ROWNUM <= 3),
+     managers
+WHERE maxEmpl = manager), managers
+WHERE count = max
+
+-----------------------------------------------------------------------------------------
+
+15.)Среди работников, у которых разница зарплаты с их менеджером менее 5000 выбрать того,
+который был трудоустроен раньше остальных
+
+WITH managers as (SELECT EMPLOYEES.EMPLOYEE_ID as manager, SALARY
+                  FROM (SELECT EMPLOYEE_ID, MANAGER_ID
+                        FROM EMPLOYEES
+                        WHERE MANAGER_ID IS NOT NULL) emp
+                           JOIN EMPLOYEES on EMPLOYEES.EMPLOYEE_ID = emp.MANAGER_ID)
+
+SELECT LAST_NAME, FIRST_NAME, HIRE_DATE
+FROM (SELECT MIN(HIRE_DATE) as min
+      FROM (SELECT EMPLOYEE_ID, HIRE_DATE
+            FROM EMPLOYEES,
+                 managers
+            WHERE (managers.SALARY - EMPLOYEES.SALARY) <= 5000
+              AND MANAGER_ID = manager)),
+     EMPLOYEES
+WHERE HIRE_DATE = min
+
+-----------------------------------------------------------------------------------------
+
+16.)Сформировать пять пар (ИД отдела, ИД сотрудника) по следующему принципу:
+в первую пару попадает а)отдел, в котором общая зарплата сотрудников наименьшая среди
+отделов и б)сотрудник, у которого наибольшая зарплата среди всех сотрудников. Во вторую
+пару отдел и сотрудник, занимающие второе место по этому критерию и т.д.  Если есть
+несколько отделов или сотрудников с одной и той же величиной зарплаты, то порядок для
+них не важен (т.е. если два сотрудника получают 100 000 и это наибольшая ЗП, то не важно,
+кто из них будет в первой паре, а кто во второй)
+
+SELECT depID, emp
+FROM (SELECT depID, row_number() over (ORDER BY depID) as rown
+      FROM (SELECT SUM(SALARY)             as sum,
+                   EMPLOYEES.DEPARTMENT_ID as depID
+            FROM EMPLOYEES
+                     JOIN DEPARTMENTS on DEPARTMENTS.DEPARTMENT_ID = EMPLOYEES.DEPARTMENT_ID
+            group by EMPLOYEES.DEPARTMENT_ID
+            order by sum ASC)
+      WHERE ROWNUM <= 5) dep,
+
+     (SELECT EMPLOYEE_ID as emp, row_number() over (ORDER BY EMPLOYEE_ID) as rowb
+      FROM (SELECT EMPLOYEE_ID
+            FROM EMPLOYEES
+            order by SALARY desc)
+      WHERE ROWNUM <= 5) emps
+WHERE dep.rown = emps.rowb
+order by depID asc
+
+

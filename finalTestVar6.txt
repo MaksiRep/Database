@@ -1,0 +1,143 @@
+ВАРИАНТ 6
+
+create table "Наниматель"
+(
+	id int default 5 not null
+		constraint НАНИМАТЕЛЬ_PK
+			primary key,
+	"Наименование" varchar2(30) not null,
+	"Место" varchar2(30) not null,
+	"Льгота" int default 4 not null
+)
+
+create table "Бюро найма"
+(
+	id int default 3 not null
+		constraint "БЮРО НАЙМА_PK"
+			primary key,
+	"Название" varchar2(30) not null,
+	"Адрес" varchar2(40) not null
+)
+
+create table "Профессии"
+(
+	id int default 3 not null
+		constraint ПРОФЕССИИ_PK
+			primary key,
+	"Наименование" varchar2(30) not null,
+	"Стоимость" int default 5 not null
+)
+
+create table "Договор"
+(
+	"Номер" int default 3 not null
+		constraint "ТРУДОВОЙ _PK"
+			primary key,
+	"Дата" DATE not null,
+	"Наниматель" int default 3 not null
+		constraint "ТРУДОВОЙ_fk1"
+			references "Наниматель",
+	"Бюро" int default 3 not null
+		constraint "ТРУДОВОЙ_fk2"
+			references "Бюро найма",
+	"Профессия" int default 3 not null
+		constraint "ТРУДОВОЙ_fk3"
+			references "Профессии",
+	"Количество" int default 5 not null
+)
+
+
+
+
+INSERT INTO "Наниматель" (ID, "Наименование", "Место", "Льгота")
+VALUES (1,	'Dialkon',           'Novosibirsk',      5);
+INSERT INTO "Наниматель" (ID, "Наименование", "Место", "Льгота")
+VALUES (2,	'Nejron Kompjukers', 'Moskva',           3);
+INSERT INTO "Наниматель" (ID, "Наименование", "Место", "Льгота")
+VALUES (3,	'NPK Konkakk',       'Novosibirsk',      3);
+INSERT INTO "Наниматель" (ID, "Наименование", "Место", "Льгота")
+VALUES (4,	'Kanbler',           'Sankt-Peterburg',  2);
+INSERT INTO "Наниматель" (ID, "Наименование", "Место", "Льгота")
+VALUES (5,	'Nonolet',           'Novosibirsk',      5);
+
+
+
+INSERT INTO "Бюро найма" (id, "Название", "Адрес")
+VALUES (1,	'Artehk',	'Novosibirsk Metro Krasnyj prospekt');
+INSERT INTO "Бюро найма" (id, "Название", "Адрес")
+VALUES (2,	'Ajron',	'Moskva Taganskaja 9');
+INSERT INTO "Бюро найма" (id, "Название", "Адрес")
+VALUES (3,	'Gotti',	'Novosibirsk Ploschad Kondratjuka');
+INSERT INTO "Бюро найма" (id, "Название", "Адрес")
+VALUES (4,	'Landor',	'Novosibirsk Mikrorajon Sch');
+
+
+
+INSERT INTO "Профессии" (id, "Наименование", "Стоимость")
+VALUES (1,   'Bujgalker',      6000);
+INSERT INTO "Профессии" (id, "Наименование", "Стоимость")
+VALUES (2,   'Inzhener',       7000);
+INSERT INTO "Профессии" (id, "Наименование", "Стоимость")
+VALUES (3,   'Programmist',    10000);
+INSERT INTO "Профессии" (id, "Наименование", "Стоимость")
+VALUES (4,   'Povar',          4000);
+INSERT INTO "Профессии" (id, "Наименование", "Стоимость")
+VALUES (5,   'Barmen',         2500);
+
+
+
+INSERT INTO "Договор" ("Номер", "Дата", "Наниматель", "Бюро", "Профессия", "Количество")
+VALUES (1,   TO_DATE('15.10.2002', 'dd/mm/yyyy'),       1,        3,     2,	1);
+INSERT INTO "Договор" ("Номер", "Дата", "Наниматель", "Бюро", "Профессия", "Количество")
+VALUES (2,   TO_DATE('18.10.2002', 'dd/mm/yyyy'),       3,        1,     4,	2);
+INSERT INTO "Договор" ("Номер", "Дата", "Наниматель", "Бюро", "Профессия", "Количество")
+VALUES (3,   TO_DATE('03.12.2002', 'dd/mm/yyyy'),       1,        3,     1,	2);
+INSERT INTO "Договор" ("Номер", "Дата", "Наниматель", "Бюро", "Профессия", "Количество")
+VALUES (4,   TO_DATE('25.11.2002', 'dd/mm/yyyy'),       2,        2,     5,	3);
+INSERT INTO "Договор" ("Номер", "Дата", "Наниматель", "Бюро", "Профессия", "Количество")
+VALUES (5,   TO_DATE('02.12.2002', 'dd/mm/yyyy'),       1,        4,     4,	3);
+INSERT INTO "Договор" ("Номер", "Дата", "Наниматель", "Бюро", "Профессия", "Количество")
+VALUES (6,   TO_DATE('27.10.2002', 'dd / mm / yyyy'),       4,        4,     1,	1);
+INSERT INTO "Договор" ("Номер", "Дата", "Наниматель", "Бюро", "Профессия", "Количество")
+VALUES (7,   TO_DATE('03.12.2002', 'dd/mm/yyyy'),       5,        1,     4,	1);
+INSERT INTO "Договор" ("Номер", "Дата", "Наниматель", "Бюро", "Профессия", "Количество")
+VALUES (8,   TO_DATE('09.11.2002', 'dd/mm/yyyy'),       1,        2,     3,	2);
+INSERT INTO "Договор" ("Номер", "Дата", "Наниматель", "Бюро", "Профессия", "Количество")
+VALUES (9,   TO_DATE('20.11.2002', 'dd/mm/yyyy'),       4,        4,     3,	4);
+INSERT INTO "Договор" ("Номер", "Дата", "Наниматель", "Бюро", "Профессия", "Количество")
+VALUES (10,  TO_DATE('27.12.2002', 'dd/mm/yyyy'),       1,        1,     3,	2);
+
+
+SQL:
+
+1.)SELECT "Наниматель", "Бюро", "Профессия", "Количество"
+FROM "Договор"
+WHERE "Дата" >= TO_DATE('12.08.2002', 'dd/mm/yyyy') and "Дата" <= TO_DATE('30.10.2002', 'dd/mm/yyyy')
+order by "Наниматель"
+
+
+2.)SELECT ID, "Наименование", "Место", "Льгота" + 5
+FROM "Наниматель"
+WHERE "Место" = 'Novosibirsk' or "Место" = 'Moskva'
+
+
+3.)SELECT "Наниматель", SUM("Количество")
+FROM "Договор"
+group by "Наниматель"
+
+
+4.)SELECT "Стоимость" * "Договор"."Количество"
+FROM "Наниматель"
+         join "Договор" on "Наниматель".ID = "Договор"."Наниматель"
+         JOIN "Профессии" on "Наниматель".ID = "Договор"."Профессия"
+WHERE "Наниматель"."Наименование" = 'Dialkon'
+  and "Дата" = TO_DATE('03.12.2002', 'dd/mm/yyyy')
+  AND "Договор"."Профессия" = "Профессии".ID
+
+
+5.)SELECT "Наименование", sum
+FROM (SELECT SUM("Количество") as sum, "Профессия"
+      FROM "Договор"
+      group by "Профессия"
+      order by sum desc)
+         JOIN "Профессии" on "Профессия" = ID
